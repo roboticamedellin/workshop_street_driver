@@ -1,0 +1,143 @@
+#!/usr/bin/env python3
+
+import cv2
+import numpy as np
+import rospy
+
+from sensor_msgs.msg import Image
+from geometry_msgs.msg import Twist
+from cv_bridge import CvBridge
+
+
+class StreetDriver(object):
+
+    def __init__(self, camera_topic, motor_publisher):
+
+        self.image_subscriber = rospy.Subscriber(
+            camera_topic,
+            Image,
+            queue_size=1,
+            callback=self.image_callback)
+
+        # self.image_publisher = rospy.Publisher(
+        #     'street_driver/camera/image_binary/raw', Image, queue_size=1)
+
+        self.motor_publisher = motor_publisher
+
+        self.bridge = CvBridge()
+        self.is_shutdown = False
+        self.min_chroma = 0.2
+        self.min_green = 50
+        self.max_green = 70
+
+    def image_callback(self, msg):
+        """
+        Callback for receiving image messages
+
+        Parameters
+        ----------
+        msg : sensor_msgs.msg.Image.
+            Image message
+        """
+
+        # image in BGR color space
+        BGR = self.bridge.imgmsg_to_cv2(msg)
+
+        # reduce the resolution of the image to half to allow for faster processing
+        BGR = cv2.resize(BGR, (160, 120))
+
+        # convert from BGR to HSV color space
+        HSV = cv2.cvtColor(BGR, cv2.COLOR_BGR2HSV)
+        H = HSV[..., 0]
+        S = HSV[..., 1]
+
+        chromacity = S > 255 * self.min_chroma
+
+        is_green = (H > self.min_green) & (
+            H < self.max_green) & (chromacity > 0)
+
+        self.compute_control(is_green)
+
+    def compute_control(self, is_green):
+
+        control_shape = (20, 20)
+        max_area = control_shape[0] * control_shape[1]
+
+        sum_left = int(
+            np.sum(is_green[-control_shape[0]:, :control_shape[1]])) / max_area
+        sum_right = int(
+            np.sum(is_green[-control_shape[0]:, -control_shape[1]:])) / max_area
+
+        # whether or not need to turn
+        need_turn = sum_left > 0.1 or sum_right > 0.1
+
+        # the direction to turn
+        turn_direction = -1.0 if sum_left > sum_right else 1.0
+        turn_magnitud = sum_left if sum_left > sum_right else sum_right
+
+        ############################
+        # message publishing
+        ############################
+        # creates a Twist message with angular and linear velocity
+        twistMsg = Twist()
+        twistMsg.angular.z = turn_direction * turn_magnitud * 0.25
+        # twistMsg.angular.z = 0.0
+
+        # TODO: change for a better control strategy
+        if need_turn:
+            twistMsg.linear.x = 0.5
+        else:
+            twistMsg.linear.x = 0.5
+
+        rospy.loginfo('angular: {0:.03f} linear: {1:.03f}'.format(
+            twistMsg.angular.z, twistMsg.linear.x))
+
+        # overwrite the command if the node is shutting down
+        if self.is_shutdown:
+            twistMsg.linear.x = 0.0
+            twistMsg.angular.z = 0.0
+
+        # publish message to topic
+        self.motor_publisher.publish(twistMsg)
+
+    def shutdown_hook(self):
+        """
+        Callback function executed when the node is shutting down.
+
+        In case the vehicle is moving, the motor_publisher emits a final
+        command to stop it.
+        """
+
+        rospy.loginfo('shutdown hook')
+        self.is_shutdown = True
+
+        # stop the car
+        cmd = Twist()
+        cmd.linear.x = 0.0
+        cmd.angular.z = 0.0
+
+        self.motor_publisher.publish(cmd)
+
+
+def main():
+    # global motor_publisher
+
+    rospy.init_node('street_driver')
+
+    motor_publisher = rospy.Publisher(
+        '/motors/motor_twist', Twist, queue_size=1)
+
+    street_driver = StreetDriver(
+        camera_topic='/camera/BGR/raw',
+        motor_publisher=motor_publisher)
+
+    rospy.on_shutdown(street_driver.shutdown_hook)
+
+    try:
+        rospy.spin()
+    except Exception:
+        rospy.loginfo("shutting down")
+
+
+if __name__ == '__main__':
+    main()
