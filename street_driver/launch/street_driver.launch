@@ -1,0 +1,3 @@
+<launch>
+  <node name="street_driver" pkg="street_driver" type="street_driver" output="screen" />
+</launch>

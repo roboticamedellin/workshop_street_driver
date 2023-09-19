@@ -1,0 +1,17 @@
+build/
+
+CMakeLists.txt
+
+# IPython checkpoints
+.ipynb_checkpoints
+
+**/*.bash_history
+
+src/street_driver/.ros
+src/street_driver/.python_history
+
+# Pyhton
+**/__pycache__
+
+
+.vscode

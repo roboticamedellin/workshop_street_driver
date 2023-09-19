@@ -1,0 +1,45 @@
+version: '3'
+
+networks:
+  host:
+    name: host
+    external: true
+
+services:
+  ros_master:
+    image: ghcr.io/roboticamed/mardan_noetic:latest@sha256:3b26d5e831b2d24bae3150b490db6913f329947c9e11d93a513d5deb7da6888d
+    restart: always
+    environment:
+      - ROS_MASTER_URI=http://${ROBOT_IP}:11311
+      - ROS_IP=${ROBOT_IP}
+    network_mode: host
+    command: |
+      roscore
+
+  motor_control:
+    image: ghcr.io/roboticamed/mardan_noetic:latest@sha256:3b26d5e831b2d24bae3150b490db6913f329947c9e11d93a513d5deb7da6888d
+    restart: always
+    depends_on:
+      - ros_master
+    environment:
+      - ROS_MASTER_URI=http://${ROBOT_IP}:11311
+      - ROS_IP=${ROBOT_IP}
+    network_mode: host
+    devices:
+      - /dev/i2c-1
+    command: |
+      roslaunch mardan motor_control.launch
+
+  camera:
+    image: ghcr.io/roboticamed/mardan_noetic:latest@sha256:3b26d5e831b2d24bae3150b490db6913f329947c9e11d93a513d5deb7da6888d
+    restart: always
+    depends_on:
+      - ros_master
+    environment:
+      - ROS_MASTER_URI=http://${ROBOT_IP}:11311
+      - ROS_IP=${ROBOT_IP}
+    network_mode: host
+    devices:
+      - /dev/video0
+    command: |
+      roslaunch mardan camera.launch
