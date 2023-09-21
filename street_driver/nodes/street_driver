@@ -3,6 +3,7 @@
 import cv2
 import numpy as np
 import rospy
+import threading
 
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import Twist
@@ -25,10 +26,19 @@ class StreetDriver(object):
         self.motor_publisher = motor_publisher
 
         self.bridge = CvBridge()
+        self.input_image = None
+        self.input_image_lock = threading.Lock()
+
+        self.shutdown_mutex = threading.Lock()
         self.is_shutdown = False
+
         self.min_chroma = 0.2
         self.min_green = 50
         self.max_green = 70
+
+        self.control_thread = threading.Thread(target=self.control_thread)
+        self.control_thread.start()
+
 
     def image_callback(self, msg):
         """
@@ -40,23 +50,45 @@ class StreetDriver(object):
             Image message
         """
 
-        # image in BGR color space
-        BGR = self.bridge.imgmsg_to_cv2(msg)
+        with self.input_image_lock:
+            self.input_image = self.bridge.imgmsg_to_cv2(msg)
 
-        # reduce the resolution of the image to half to allow for faster processing
-        BGR = cv2.resize(BGR, (160, 120))
+    def control_thread(self):
+        """
+        Thread for computing the control commands
+        """
 
-        # convert from BGR to HSV color space
-        HSV = cv2.cvtColor(BGR, cv2.COLOR_BGR2HSV)
-        H = HSV[..., 0]
-        S = HSV[..., 1]
+        # 1 Hz
+        rate = rospy.Rate(1)
+        BGR = None
 
-        chromacity = S > 255 * self.min_chroma
+        while not rospy.is_shutdown():
 
-        is_green = (H > self.min_green) & (
-            H < self.max_green) & (chromacity > 0)
+            with self.input_image_lock:
+                if self.input_image is None:
+                    continue
+                
+                # copy the pixels from the input_image into BGR
+                BGR = np.copy(self.input_image)
 
-        self.compute_control(is_green)
+
+            # reduce the resolution of the image to half to allow for faster processing
+            BGR = cv2.resize(BGR, (160, 120))
+
+            # convert from BGR to HSV color space
+            HSV = cv2.cvtColor(BGR, cv2.COLOR_BGR2HSV)
+            H = HSV[..., 0]
+            S = HSV[..., 1]
+
+            chromacity = S > 255 * self.min_chroma
+
+            is_green = (H > self.min_green) & (
+                H < self.max_green) & (chromacity > 0)
+
+            self.compute_control(is_green)
+
+            # sleep until the next iteration
+            rate.sleep()
 
     def compute_control(self, is_green):
 
@@ -80,22 +112,22 @@ class StreetDriver(object):
         ############################
         # creates a Twist message with angular and linear velocity
         twistMsg = Twist()
-        twistMsg.angular.z = turn_direction * turn_magnitud * 0.25
-        # twistMsg.angular.z = 0.0
+        twistMsg.angular.z = turn_direction * turn_magnitud * 0.5
 
         # TODO: change for a better control strategy
         if need_turn:
-            twistMsg.linear.x = 0.5
+            twistMsg.linear.x = 0.75
         else:
-            twistMsg.linear.x = 0.5
+            twistMsg.linear.x = 0.75
 
         rospy.loginfo('angular: {0:.03f} linear: {1:.03f}'.format(
             twistMsg.angular.z, twistMsg.linear.x))
 
         # overwrite the command if the node is shutting down
-        if self.is_shutdown:
-            twistMsg.linear.x = 0.0
-            twistMsg.angular.z = 0.0
+        with self.shutdown_mutex:
+            if self.is_shutdown:
+                twistMsg.linear.x = 0.0
+                twistMsg.angular.z = 0.0
 
         # publish message to topic
         self.motor_publisher.publish(twistMsg)
@@ -109,14 +141,18 @@ class StreetDriver(object):
         """
 
         rospy.loginfo('shutdown hook')
-        self.is_shutdown = True
 
-        # stop the car
-        cmd = Twist()
-        cmd.linear.x = 0.0
-        cmd.angular.z = 0.0
+        with self.shutdown_mutex:
+            self.is_shutdown = True
 
-        self.motor_publisher.publish(cmd)
+            # stop the car
+            cmd = Twist()
+            cmd.linear.x = 0.0
+            cmd.angular.z = 0.0
+
+            rospy.loginfo('angular: {0:.03f} linear: {1:.03f}'.format(
+                cmd.angular.z, cmd.linear.x))
+            self.motor_publisher.publish(cmd)
 
 
 def main():
