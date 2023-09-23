@@ -14,6 +14,12 @@ docker-compose --env-file env.txt up -d motor_control server
 docker-compose --env-file env.txt up -d camera
 ```
 
+If the motors doesnt work, press reset button in the Arduino and execute the following comand:
+
+```bash
+docker-compose --env-file env.txt restart motor_control
+```
+
 ## Run the Street Driver code
 
 In another terminal, considering `ROBOT_IP` and `ROS_IP` as the ip of the robot, run:
