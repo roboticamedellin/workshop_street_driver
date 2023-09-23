@@ -10,12 +10,13 @@ Run the base containers controling the motors and camera of the robot
 
 ```bash
 docker-compose --env-file env.txt up -d ros_master
-docker-compose --env-file env.txt up -d motor_control camera
+docker-compose --env-file env.txt up -d motor_control server
+docker-compose --env-file env.txt up -d camera
 ```
 
 ## Run the Street Driver code
 
-In another terminal, run:
+In another terminal, considering `ROBOT_IP` and `ROS_IP` as the ip of the robot, run:
 
 ```bash
 export ROBOT_IP=10.0.0.5
