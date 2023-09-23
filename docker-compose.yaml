@@ -43,3 +43,13 @@ services:
       - /dev/video0
     command: |
       roslaunch mardan camera.launch
+  
+  server:
+    image: ghcr.io/roboticamed/mardan_server_noetic:latest@sha256:4698663639550b81a01adba6cdd0e80d51183e52faf9a5e23b7b46ee92d4e8e5
+    restart: always
+    depends_on:
+      - ros_master
+    environment:
+      - ROS_MASTER_URI=http://${ROBOT_IP}:11311
+      - ROS_IP=${ROBOT_IP}
+    network_mode: host
