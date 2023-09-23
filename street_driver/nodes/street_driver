@@ -20,8 +20,8 @@ class StreetDriver(object):
             queue_size=1,
             callback=self.image_callback)
 
-        # self.image_publisher = rospy.Publisher(
-        #     'street_driver/camera/image_binary/raw', Image, queue_size=1)
+        self.image_publisher = rospy.Publisher(
+            'street_driver/camera/image_processed/raw', Image, queue_size=1)
 
         self.motor_publisher = motor_publisher
 
@@ -38,7 +38,6 @@ class StreetDriver(object):
 
         self.control_thread = threading.Thread(target=self.control_thread)
         self.control_thread.start()
-
 
     def image_callback(self, msg):
         """
@@ -67,10 +66,9 @@ class StreetDriver(object):
             with self.input_image_lock:
                 if self.input_image is None:
                     continue
-                
+
                 # copy the pixels from the input_image into BGR
                 BGR = np.copy(self.input_image)
-
 
             # reduce the resolution of the image to half to allow for faster processing
             BGR = cv2.resize(BGR, (160, 120))
@@ -84,6 +82,14 @@ class StreetDriver(object):
 
             is_green = (H > self.min_green) & (
                 H < self.max_green) & (chromacity > 0)
+
+            # create an RGB image with the image mask
+            RGB = np.zeros_like(BGR)
+            RGB[..., 1] = is_green * 255
+
+            # publish the RGB image for visualization
+            msg = self.bridge.cv2_to_imgmsg(RGB, "rgb8")
+            self.image_publisher.publish(msg)
 
             self.compute_control(is_green)
 

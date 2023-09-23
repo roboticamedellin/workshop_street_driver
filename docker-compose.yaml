@@ -7,7 +7,7 @@ networks:
 
 services:
   ros_master:
-    image: ghcr.io/roboticamed/mardan_noetic:latest@sha256:3b26d5e831b2d24bae3150b490db6913f329947c9e11d93a513d5deb7da6888d
+    image: ghcr.io/roboticamed/mardan_noetic:latest@sha256:793382242d74670c82330efc4b55d8337dbcaa30c32760f32288506ad8ce02ec
     restart: always
     environment:
       - ROS_MASTER_URI=http://${ROBOT_IP}:11311
@@ -17,7 +17,7 @@ services:
       roscore
 
   motor_control:
-    image: ghcr.io/roboticamed/mardan_noetic:latest@sha256:3b26d5e831b2d24bae3150b490db6913f329947c9e11d93a513d5deb7da6888d
+    image: ghcr.io/roboticamed/mardan_noetic:latest@sha256:793382242d74670c82330efc4b55d8337dbcaa30c32760f32288506ad8ce02ec
     restart: always
     depends_on:
       - ros_master
@@ -31,7 +31,7 @@ services:
       roslaunch mardan motor_control.launch
 
   camera:
-    image: ghcr.io/roboticamed/mardan_noetic:latest@sha256:3b26d5e831b2d24bae3150b490db6913f329947c9e11d93a513d5deb7da6888d
+    image: ghcr.io/roboticamed/mardan_noetic:latest@sha256:793382242d74670c82330efc4b55d8337dbcaa30c32760f32288506ad8ce02ec
     restart: always
     depends_on:
       - ros_master
